@@ -5,8 +5,12 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# TanStack Router auto-generated route tree
-apps/web/src/routeTree.gen.ts
+# TanStack Router auto-generated route tree — INTENTIONALLY COMMITTED
+# so that fresh clones and CI can run `pnpm typecheck` without first launching
+# Vite. The Router plugin regenerates this on `pnpm dev` / `pnpm build`, so
+# it stays in sync during normal development. Uncomment the next line if you
+# prefer to gitignore it (in which case, add a `tsr generate` step in CI).
+# apps/web/src/routeTree.gen.ts
 
 # AWS SAM
 .aws-sam/
