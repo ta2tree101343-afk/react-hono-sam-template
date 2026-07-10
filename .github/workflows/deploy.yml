@@ -100,7 +100,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup AWS SAM CLI
-        uses: aws-actions/setup-sam@2360ef6d90015369947b45b496193ab9976a9b04 # v2
+        uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v2
         with:
           use-installer: true
 
