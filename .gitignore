@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# TanStack Router auto-generated route tree
+apps/web/src/routeTree.gen.ts
+
+# AWS SAM
+.aws-sam/
+samconfig.local.toml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Test artifacts (Playwright etc. — for future e2e)
+playwright-report/
+test-results/
+.playwright/
+
+# Vite temporary files
+vite.config.*.timestamp-*
+
+# Sensitive credentials (safety net — never commit TLS certs / private keys)
+*.pem
+*.key
+*.p12
+*.crt
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+*.swo
+
+# Cache
+.cache/
+.turbo/

@@ -1,0 +1,30 @@
+{
+	"name": "react-hono-sam-template",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "pnpm --parallel --filter \"./apps/*\" dev",
+		"build": "pnpm --filter @app/api build:types && pnpm -r build",
+		"typecheck": "pnpm -r typecheck",
+		"lint": "biome lint .",
+		"format": "biome format --write .",
+		"check": "biome check .",
+		"fix": "biome check --write .",
+		"biome:ci": "biome ci .",
+		"check:lambda-deps": "node scripts/check-lambda-deps.mjs",
+		"db:up": "docker compose up -d",
+		"db:down": "docker compose down",
+		"db:reset": "docker compose down -v && docker compose up -d",
+		"db:logs": "docker compose logs -f",
+		"deploy:all": "pnpm build && pnpm --filter @app/api sam:build && pnpm --filter @app/api sam:deploy && pnpm run deploy:web",
+		"deploy:web": "bash scripts/deploy-web.sh"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.2",
+		"typescript": "~7.0.2"
+	},
+	"packageManager": "pnpm@11.10.0",
+	"engines": {
+		"node": ">=24 <25"
+	}
+}

@@ -1,0 +1,114 @@
+# All third-party actions are pinned to full commit SHAs for supply-chain safety.
+# Version tags after `#` are informational. Dependabot (.github/dependabot.yml)
+# updates the SHAs weekly.
+#
+# =============================================================================
+# 🛠️  Setup required before enabling this workflow:
+#
+# 1) Create an IAM OIDC provider in AWS (one-time per AWS account):
+#    - URL:      https://token.actions.githubusercontent.com
+#    - Audience: sts.amazonaws.com
+#
+# 2) Create an IAM role for GitHub Actions to assume via OIDC.
+#    Trust policy example:
+#    {
+#      "Version": "2012-10-17",
+#      "Statement": [{
+#        "Effect": "Allow",
+#        "Principal": {
+#          "Federated": "arn:aws:iam::YOUR_ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
+#        },
+#        "Action": "sts:AssumeRoleWithWebIdentity",
+#        "Condition": {
+#          "StringEquals": {
+#            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+#          },
+#          "StringLike": {
+#            "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main"
+#          }
+#        }
+#      }]
+#    }
+#    Attach permissions for: CloudFormation, IAM (PassRole), S3, CloudFront,
+#    Lambda, API Gateway, and any other resources your stack creates.
+#
+# 3) Register the following in the GitHub repository
+#    (Settings → Secrets and variables → Actions → Variables tab):
+#      Variable  AWS_REGION           e.g. ap-northeast-1
+#      Variable  AWS_DEPLOY_ROLE_ARN  arn:aws:iam::YOUR_ACCOUNT:role/YOUR_ROLE
+#
+# 4) Change `if: false` below to `if: true` (or remove the line entirely).
+#
+# 5) Optional but recommended:
+#    - Enable branch protection on main.
+#    - Configure "environment: production" with required reviewers.
+#    - Consider a separate staging workflow triggered by push to develop.
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Prevent overlapping deploys but do not cancel in-flight ones (avoid partial state).
+  group: deploy-${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required for OIDC
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # ⚠️ Disabled by default. Flip to `true` after completing the setup above.
+    if: false
+    # environment: production   # Uncomment to require approval or attach secrets to an environment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 11.10.0
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm store
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@2360ef6d90015369947b45b496193ab9976a9b04 # v2
+        with:
+          use-installer: true
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy (build + sam deploy + web sync)
+        run: pnpm deploy:all

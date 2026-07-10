@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: React Hono SAM Template (API + Web SPA on CloudFront)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs24.x
+    Architectures:
+      - arm64
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+    Environment:
+      Variables:
+        NODE_ENV: production
+
+Resources:
+  # ================== API (Lambda + API Gateway) ==================
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-api-function"
+      Handler: handler/lambda.handler
+      CodeUri: src/
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /{proxy+}
+            Method: ANY
+        RootEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: esm
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - handler/lambda.ts
+        External:
+          - "@aws-sdk/*"
+        Banner:
+          - js=import { createRequire } from 'module'; const require = createRequire(import.meta.url);
+        OutExtension:
+          - .js=.mjs
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      StageName: prod
+      TracingEnabled: true
+      # CORS は CloudFront で同一オリジン化するため本来不要だが、
+      # 直接 API Gateway を叩くケース（プレビュー環境など）に備えて残す
+      Cors:
+        AllowOrigin: "'*'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+
+  # ================== DynamoDB ==================
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-users"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # ================== Web (S3 + CloudFront) ==================
+
+  WebSiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-web-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-s3-oac"
+        Description: OAC for SPA S3 bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "${AWS::StackName} SPA + API"
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200
+        IPV6Enabled: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebSiteBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+          - Id: ApiOrigin
+            DomainName: !Sub "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+            OriginPath: /prod
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Managed CachingOptimized policy
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            # Managed CachingDisabled policy
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # Managed AllViewerExceptHostHeader origin request policy
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        # SPA fallback: TanStack Router のクライアントサイドルーティングに対応
+        # /users/123 のような直接アクセス時、S3 に該当キーが無い場合でも /index.html を返して 200 とする
+        #
+        # ⚠️ 403 → /index.html リライトの副作用として、OAC / BucketPolicy の設定ミス
+        # (S3 が本当に AccessDenied を返している) も「意図せず SPA が表示される」の
+        # 形で隠蔽されうる。デプロイ後に必ず以下を確認すること:
+        #   curl -I https://<cf-domain>/assets/index-<hash>.js   # → 200
+        #   aws cloudfront get-distribution-config ...           # OAC が正しくアタッチされているか
+        # 「SPA だけは表示されるがアセットが 403」の状態を検知するため、
+        # CloudWatch で "OriginResponseError" メトリクスをアラートするのも推奨。
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  WebSiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebSiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${WebSiteBucket}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL (direct access, not via CloudFront)
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt ApiFunction.Arn
+
+  WebSiteURL:
+    Description: CloudFront distribution URL (SPA + API entry point)
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+
+  WebSiteBucketName:
+    Description: S3 bucket name for web assets (used by deploy scripts)
+    Value: !Ref WebSiteBucket
+
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID (used for cache invalidation)
+    Value: !Ref CloudFrontDistribution
+
+  UsersTableName:
+    Description: DynamoDB Users Table name
+    Value: !Ref UsersTable

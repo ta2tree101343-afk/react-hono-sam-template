@@ -1,0 +1,89 @@
+# All third-party actions are pinned to full commit SHAs for supply-chain safety.
+# Version tags after `#` are informational. Dependabot (.github/dependabot.yml)
+# updates the SHAs weekly.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck / Lint / Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 11.10.0
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm store
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome check (lint + format)
+        run: pnpm biome:ci
+
+      - name: Verify Lambda deploy deps are in sync
+        run: pnpm check:lambda-deps
+
+      - name: Build API .d.ts (needed for web typecheck)
+        run: pnpm --filter @app/api build:types
+
+      - name: Typecheck (api + web)
+        run: pnpm typecheck
+
+      - name: Build (all packages)
+        run: pnpm build
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@2360ef6d90015369947b45b496193ab9976a9b04 # v2
+        with:
+          use-installer: true
+
+      - name: SAM validate + cfn-lint
+        working-directory: apps/api
+        # Catches CloudFormation syntax errors, unresolved refs, and structural
+        # issues (circular dependencies, invalid intrinsic function usage, etc.)
+        # before they surface in an actual `sam deploy`.
+        run: sam validate --lint
+
+      - name: Install esbuild globally (for SAM's esbuild builder)
+        # SAM copies apps/api/src/ into a sandbox and runs its own npm install
+        # there, so it cannot see the workspace-level esbuild. A global install
+        # makes it findable in PATH during `sam build`.
+        run: npm install -g esbuild@0.28.1
+
+      - name: SAM build (Lambda bundle sanity check)
+        working-directory: apps/api
+        # Verifies the esbuild bundle succeeds with the current
+        # apps/api/src/package.json deps and template.yaml BuildProperties.
+        run: sam build

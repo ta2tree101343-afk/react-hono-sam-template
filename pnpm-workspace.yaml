@@ -1,0 +1,18 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# サプライチェーンセキュリティ設定
+blockExoticSubdeps: true
+minimumReleaseAge: 10080  # 7 days in minutes: 新規公開パッケージの導入を待機
+
+# `minimumReleaseAge` を意図的にバイパスする allowlist。
+# TypeScript 本体および公式が配布するプラットフォーム別バイナリ (@typescript/typescript-*)。
+# メジャーバージョンを積極的に追随するため待機期間を免除する。
+minimumReleaseAgeExclude:
+  - typescript
+  - "@typescript/*"
+
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true

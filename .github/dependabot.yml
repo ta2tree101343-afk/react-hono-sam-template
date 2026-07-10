@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # Keep GitHub Actions SHAs updated weekly.
+  # Dependabot auto-generates PRs that bump the pinned commit SHA and the
+  # informational version tag comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      # Wait 7 days before proposing updates to newly published action versions.
+      # Mirrors pnpm-workspace.yaml `minimumReleaseAge`.
+      default-days: 7
+
+  # npm workspaces (root + apps/api + apps/web).
+  # Dependabot follows pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Bundle non-breaking updates to reduce PR noise.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    cooldown:
+      # Wait 7 days before proposing updates to newly published package versions.
+      # Mirrors pnpm-workspace.yaml `minimumReleaseAge`.
+      default-days: 7

@@ -1,0 +1,90 @@
+{
+	"files.trimTrailingWhitespace": true,
+	"files.insertFinalNewline": true,
+
+	"files.exclude": {
+		"**/.aws-sam": true,
+		"**/node_modules": true,
+		"**/dist": true,
+		"**/.turbo": true,
+		"apps/web/src/routeTree.gen.ts": true
+	},
+	"files.watcherExclude": {
+		"**/.aws-sam/**": true,
+		"**/node_modules/**": true,
+		"**/dist/**": true
+	},
+	"search.exclude": {
+		"**/.aws-sam": true,
+		"**/dist": true,
+		"**/pnpm-lock.yaml": true
+	},
+
+	"editor.codeActionsOnSave": {
+		"source.fixAll.biome": "explicit",
+		"source.addMissingImports": "explicit",
+		"source.organizeImports.biome": "explicit"
+	},
+
+	"editor.formatOnSave": true,
+
+	"[javascript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[javascriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[json]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[jsonc]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[yaml]": {
+		"editor.defaultFormatter": "redhat.vscode-yaml"
+	},
+
+	"css.lint.unknownAtRules": "ignore",
+	"scss.lint.unknownAtRules": "ignore",
+
+	"yaml.schemaStore.enable": true,
+	"yaml.customTags": [
+		"!Ref",
+		"!Sub",
+		"!Sub sequence",
+		"!If",
+		"!If sequence",
+		"!Equals",
+		"!Equals sequence",
+		"!GetAtt",
+		"!GetAtt sequence",
+		"!Join",
+		"!Join sequence",
+		"!Select",
+		"!Select sequence",
+		"!Split",
+		"!Split sequence",
+		"!ImportValue",
+		"!Condition",
+		"!And",
+		"!And sequence",
+		"!Or",
+		"!Or sequence",
+		"!Not",
+		"!Not sequence",
+		"!Base64",
+		"!Cidr",
+		"!FindInMap",
+		"!FindInMap sequence",
+		"!GetAZs",
+		"!Transform"
+	],
+
+	"cSpell.words": ["hono"]
+}

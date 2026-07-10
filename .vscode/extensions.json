@@ -1,0 +1,10 @@
+{
+	"recommendations": [
+		"biomejs.biome",
+		"redhat.vscode-yaml",
+		"streetsidesoftware.code-spell-checker",
+		"amazonwebservices.aws-toolkit-vscode",
+		"ms-azuretools.vscode-docker",
+		"bradlc.vscode-tailwindcss"
+	]
+}

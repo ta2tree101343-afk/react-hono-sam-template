@@ -1,0 +1,57 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": [
+			"**",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/.aws-sam",
+			"!**/public",
+			"!apps/web/src/routeTree.gen.ts",
+			"!pnpm-lock.yaml"
+		]
+	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended"
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double",
+			"semicolons": "asNeeded"
+		}
+	},
+	"css": {
+		"parser": {
+			"cssModules": false,
+			"allowWrongLineComments": false,
+			"tailwindDirectives": true
+		},
+		"linter": {
+			"enabled": false
+		},
+		"formatter": {
+			"enabled": false
+		}
+	},
+	"json": {
+		"parser": {
+			"allowComments": true,
+			"allowTrailingCommas": true
+		}
+	}
+}
